@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 import geometry_msgs.msg
 import tf
+import tf2_ros
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from numpy.linalg import inv
 from sensor_msgs.msg import Image
@@ -16,7 +17,7 @@ class PoseProcessing:
     def __init__(self):
         rospy.loginfo("Waiting for pose processing")
         self.tf = tf.TransformListener()
-        self.br = tf.TransformBroadcaster()
+        self.br = tf2_ros.TransformBroadcaster()
 
     def SetRGBImage(self, Image):
         self.RGBImage = Image
@@ -82,20 +83,21 @@ class PoseProcessing:
 
     def CalculatePosition(self,u,v):
         depth = self.DepthImage[v,u]
-        Z = depth + 0.06
+        Z = depth + 0.05
         K = np.array([[554.2547,0,320.5],[0,554.2547,240.5],[0,0,1]])
         x = np.array([[u*Z, v*Z,Z]]).T
         self.Position = np.matmul(inv(K),x)
         return np.matmul(inv(K),x)
 
     def CalculateOrientation(self,u,v):
-        counter = 3
+        counter = 10
         dl = self.DepthImage[v,u-counter]
         dr = self.DepthImage[v,u+counter]
         left = self.CalculatePosition(u-counter,v)
         right = self.CalculatePosition(u+counter,v)
         h = dr-dl
         b = abs(right[0]-left[0])
+
         self.Yaw = math.atan(h/b)
 
     def CameraToBaseTransform(self):
@@ -106,7 +108,7 @@ class PoseProcessing:
             p.header.frame_id = "head_camera_rgb_optical_frame"
             p.pose.position.x = self.Position[0]
             p.pose.position.y = self.Position[1]
-            p.pose.position.z = 0.47
+            p.pose.position.z = self.Position[2]
             p.pose.orientation.x = orientation[0]
             p.pose.orientation.y = orientation[1]
             p.pose.orientation.z = orientation[2]
@@ -117,24 +119,30 @@ class PoseProcessing:
             print("aaaaa")
             
     def DeterminePlace(self):
-        self.br.sendTransform(self.ARposes.markers.pose[-1],rospy.Time.now(),"ArTag_1","head_camera_rgb_optical_frame")
-        p = geometry_msgs.msg.PoseStamped()
-        p.header.frame_id = "ArTag_1"
-        p.pose.position.x = 1
-        p.pose.position.y = 0
-        p.pose.position.z = 0
-        p.pose.orientation.x = 0
-        p.pose.orientation.y = 0
-        p.pose.orientation.z = 0
-        p.pose.orientation.w = 1
+        if (self.tf.frameExists("base_link") and self.tf.frameExists("head_camera_rgb_optical_frame")):
+            transform = geometry_msgs.msg.TransformStamped()
+            t = self.tf.getLatestCommonTime("base_link", "head_camera_rgb_optical_frame")
+            transform.header.stamp = t
+            transform.header.frame_id = "head_camera_rgb_optical_frame"
+            transform.child_frame_id = "ArTag"
+            transform.transform.translation = self.ArPoses.markers[0].pose.pose.position
+            transform.transform.rotation = self.ArPoses.markers[0].pose.pose.orientation
+            self.br.sendTransform(transform)
+            rate = rospy.Rate(10.0)
+            rate.sleep()
+
+            p = geometry_msgs.msg.PoseStamped()
+            p.header.frame_id = "ArTag"
+            p.pose.position.x = 0.1
+            p.pose.position.y = 0
+            p.pose.position.z = 0
+            p.pose.orientation.x = 0
+            p.pose.orientation.y = 0
+            p.pose.orientation.z = 0
+            p.pose.orientation.w = 1
 
         self.PlacePose = self.tf.transformPose("base_link", p)
-    
-    def GetBlockPosition(self):
-        return self.Position
 
-    def GetBlockOrientation(self):
-        return self.Yaw
 
     def GetBlockPose(self):
         return self.BlockPose
@@ -143,4 +151,3 @@ class PoseProcessing:
         return self.PlacePose
 
 
-        
