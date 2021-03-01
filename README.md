@@ -21,7 +21,7 @@ Step 2: Export Ros master URI and change Host Name (This task need to do every t
         ~$ export ROS_MASTER_URI=http://fetch31.local:11311 
         ~$ export ROS_HOSTNAME="Your_host_name" (If you do not know your host name, command "~$ hostname -I" in the terminal)
         
-Step 3: Roslaunch MoveIt, Ar_tracking, and 
+Step 3: Roslaunch MoveIt, Ar_tracking 
         
         ~$ roslaunch fetch_moveit_config move_group.launch
         ~$ roslaunch ar_tracking_alvar fetch_ar_tag.launch
